@@ -30,7 +30,7 @@ export default async function SupportSuccessPage({ searchParams }: PageProps) {
 
         {isMock && (
           <div className="mt-4 rounded-md bg-amber-50 p-2 text-xs text-amber-800 border border-amber-200">
-            Simulare locală de plată finalizată cu succes. Baza de date SQLite a fost actualizată.
+            Simulare locală de plată finalizată cu succes. Contribuția a fost înregistrată.
           </div>
         )}
 

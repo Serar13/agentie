@@ -1,5 +1,4 @@
 import { scanConfiguredSources } from "../services/source-service";
-import { prisma } from "../lib/prisma";
 
 async function main() {
   const limit = Number(process.argv[2] ?? 15);
@@ -18,11 +17,7 @@ async function main() {
   }
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

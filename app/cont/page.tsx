@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { getRequiredSession } from "@/lib/auth-helpers";
 import { logoutAction } from "@/lib/actions/auth-actions";
 import { ArticleCard } from "@/components/ArticleCard";
-import { usesFirebaseData } from "@/lib/data-provider";
 import { findUserById, getAccountOverview } from "@/services/firebase-store";
 import type { ArticleReference, Category, NewsArticle } from "@/lib/app-types";
 
@@ -27,12 +26,7 @@ type SubmissionRow = {
 export default async function ProfilePage() {
   const session = await getRequiredSession();
 
-  const user = usesFirebaseData()
-    ? await findUserById(session.userId)
-    : await (async () => {
-        const { prisma } = await import("@/lib/prisma");
-        return prisma.user.findUnique({ where: { id: session.userId } });
-      })();
+  const user = await findUserById(session.userId);
 
   if (!user) {
     redirect("/login");
@@ -40,36 +34,7 @@ export default async function ProfilePage() {
 
   const savedIds = user.savedArticles ? user.savedArticles.split(",").filter(Boolean) : [];
   const followedSlugs = user.followedCategories ? user.followedCategories.split(",").filter(Boolean) : [];
-  const overview = usesFirebaseData()
-    ? await getAccountOverview(user.email, savedIds, followedSlugs)
-    : await (async () => {
-        const { prisma } = await import("@/lib/prisma");
-        const [submissions, donations, membership, savedArticles, followedCategories] = await Promise.all([
-          prisma.communitySubmission.findMany({
-            where: { contactEmail: user.email },
-            orderBy: { createdAt: "desc" }
-          }),
-          prisma.donation.findMany({
-            where: { email: user.email, status: "completed" },
-            orderBy: { createdAt: "desc" }
-          }),
-          prisma.member.findUnique({
-            where: { email: user.email }
-          }),
-          savedIds.length > 0
-            ? prisma.newsArticle.findMany({
-                where: { id: { in: savedIds }, status: "published" },
-                include: { category: true, references: true }
-              })
-            : [],
-          followedSlugs.length > 0
-            ? prisma.category.findMany({
-                where: { slug: { in: followedSlugs } }
-              })
-            : []
-        ]);
-        return { submissions, donations, membership, savedArticles, followedCategories };
-      })();
+  const overview = await getAccountOverview(user.email, savedIds, followedSlugs);
 
   const submissions = overview.submissions as SubmissionRow[];
   const donations = overview.donations as Array<{ id: string }>;

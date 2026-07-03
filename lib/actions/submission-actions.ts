@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { analyzeSubmission, convertSubmissionToArticle } from "../../services/submission-service";
 import { getRequiredAdmin } from "../auth-helpers";
-import { usesFirebaseData } from "../data-provider";
 import { getFirebaseDb } from "../firebase-admin";
 
 function getField(formData: FormData, name: string): string {
@@ -40,16 +39,9 @@ export async function submitVesteBuna(formData: FormData) {
       status: "submitted"
   };
 
-  const submission = usesFirebaseData()
-    ? await (async () => {
-        const ref = getFirebaseDb().collection("communitySubmissions").doc();
-        await ref.set({ ...data, createdAt: new Date(), updatedAt: new Date() });
-        return { id: ref.id };
-      })()
-    : await (async () => {
-        const { prisma } = await import("../prisma");
-        return prisma.communitySubmission.create({ data });
-      })();
+  const submissionRef = getFirebaseDb().collection("communitySubmissions").doc();
+  await submissionRef.set({ ...data, createdAt: new Date(), updatedAt: new Date() });
+  const submission = { id: submissionRef.id };
 
   // Declansam analiza AI in background (in Next.js se ruleaza direct)
   try {
@@ -77,14 +69,6 @@ export async function convertSubmissionAction(submissionId: string) {
 
 export async function rejectSubmissionAction(submissionId: string) {
   await getRequiredAdmin();
-  if (usesFirebaseData()) {
-    await getFirebaseDb().collection("communitySubmissions").doc(submissionId).set({ status: "rejected", updatedAt: new Date() }, { merge: true });
-  } else {
-    const { prisma } = await import("../prisma");
-    await prisma.communitySubmission.update({
-      where: { id: submissionId },
-      data: { status: "rejected" }
-    });
-  }
+  await getFirebaseDb().collection("communitySubmissions").doc(submissionId).set({ status: "rejected", updatedAt: new Date() }, { merge: true });
   revalidatePath("/admin/submissions");
 }

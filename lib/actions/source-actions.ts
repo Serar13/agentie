@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { scanConfiguredSources } from "../../services/source-service";
 import { getRequiredAdmin } from "../auth-helpers";
-import { usesFirebaseData } from "../data-provider";
 import { createSource, deleteSourceFirebase, updateSourceFirebase } from "@/services/firebase-store";
 
 function getField(formData: FormData, name: string): string {
@@ -37,12 +36,7 @@ export async function addSource(formData: FormData) {
       whitelistKeywords,
       notes
   };
-  if (usesFirebaseData()) {
-    await createSource(data);
-  } else {
-    const { prisma } = await import("../prisma");
-    await prisma.source.create({ data });
-  }
+  await createSource(data);
 
   revalidatePath("/admin/sources");
 }
@@ -74,12 +68,7 @@ export async function updateSource(formData: FormData) {
       whitelistKeywords,
       notes
   };
-  if (usesFirebaseData()) {
-    await updateSourceFirebase(id, data);
-  } else {
-    const { prisma } = await import("../prisma");
-    await prisma.source.update({ where: { id }, data });
-  }
+  await updateSourceFirebase(id, data);
 
   revalidatePath("/admin/sources");
 }
@@ -90,12 +79,7 @@ export async function deleteSource(formData: FormData) {
   const id = getField(formData, "id");
   if (!id) throw new Error("ID-ul este obligatoriu.");
 
-  if (usesFirebaseData()) {
-    await deleteSourceFirebase(id);
-  } else {
-    const { prisma } = await import("../prisma");
-    await prisma.source.delete({ where: { id } });
-  }
+  await deleteSourceFirebase(id);
 
   revalidatePath("/admin/sources");
 }

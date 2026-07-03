@@ -1,4 +1,3 @@
-import { usesFirebaseData } from "../lib/data-provider";
 import { getFirebaseDb } from "../lib/firebase-admin";
 import { getAdminArticles, upsertNewsletterSubscriber } from "./firebase-store";
 
@@ -8,47 +7,17 @@ export async function subscribeToNewsletter(email: string, source = "website") {
     throw new Error("Adresa de email este invalida.");
   }
 
-  if (usesFirebaseData()) {
-    return upsertNewsletterSubscriber(cleanEmail);
-  }
-
-  const { prisma } = await import("../lib/prisma");
-  return prisma.newsletterSubscriber.upsert({
-    where: { email: cleanEmail },
-    create: {
-      email: cleanEmail,
-      source,
-      status: "active"
-    },
-    update: {
-      status: "active"
-    }
-  });
+  return upsertNewsletterSubscriber(cleanEmail);
 }
 
 export async function unsubscribeFromNewsletter(email: string) {
   const cleanEmail = email.trim().toLowerCase();
-  if (usesFirebaseData()) {
-    return getFirebaseDb().collection("newsletterSubscribers").doc(cleanEmail).set({ status: "unsubscribed" }, { merge: true });
-  }
-
-  const { prisma } = await import("../lib/prisma");
-  return prisma.newsletterSubscriber.update({
-    where: { email: cleanEmail },
-    data: { status: "unsubscribed" }
-  });
+  return getFirebaseDb().collection("newsletterSubscribers").doc(cleanEmail).set({ status: "unsubscribed" }, { merge: true });
 }
 
 export async function getNewsletterSubscribers() {
-  if (usesFirebaseData()) {
-    const snap = await getFirebaseDb().collection("newsletterSubscribers").get();
-    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as any[];
-  }
-
-  const { prisma } = await import("../lib/prisma");
-  return prisma.newsletterSubscriber.findMany({
-    orderBy: { createdAt: "desc" }
-  });
+  const snap = await getFirebaseDb().collection("newsletterSubscribers").get();
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as any[];
 }
 
 export async function createNewsletterDraft(params: {
@@ -57,57 +26,31 @@ export async function createNewsletterDraft(params: {
   articleIds: string[];
   type?: "daily" | "weekly";
 }) {
-  if (usesFirebaseData()) {
-    const ref = getFirebaseDb().collection("newsletters").doc();
-    await ref.set({
-      subject: params.subject,
-      intro: params.intro,
-      articles: JSON.stringify(params.articleIds),
-      type: params.type || "daily",
-      status: "draft",
-      createdAt: new Date()
-    });
-    return { id: ref.id };
-  }
-
-  const { prisma } = await import("../lib/prisma");
-  return prisma.newsletter.create({
-    data: {
-      subject: params.subject,
-      intro: params.intro,
-      articles: JSON.stringify(params.articleIds),
-      type: params.type || "daily",
-      status: "draft"
-    }
+  const ref = getFirebaseDb().collection("newsletters").doc();
+  await ref.set({
+    subject: params.subject,
+    intro: params.intro,
+    articles: JSON.stringify(params.articleIds),
+    type: params.type || "daily",
+    status: "draft",
+    createdAt: new Date()
   });
+  return { id: ref.id };
 }
 
 export async function renderNewsletterHtml(newsletterId: string): Promise<{ subject: string; html: string }> {
-  const newsletter = usesFirebaseData()
-    ? await getFirebaseDb()
-        .collection("newsletters")
-        .doc(newsletterId)
-        .get()
-        .then((doc) => (doc.exists ? ({ id: doc.id, ...doc.data() } as any) : null))
-    : await (async () => {
-        const { prisma } = await import("../lib/prisma");
-        return prisma.newsletter.findUnique({ where: { id: newsletterId } });
-      })();
+  const newsletter = await getFirebaseDb()
+    .collection("newsletters")
+    .doc(newsletterId)
+    .get()
+    .then((doc) => (doc.exists ? ({ id: doc.id, ...doc.data() } as any) : null));
 
   if (!newsletter) {
     throw new Error(`Newsletter not found: ${newsletterId}`);
   }
 
   const articleIds = JSON.parse(newsletter.articles) as string[];
-  const articles = usesFirebaseData()
-    ? (await getAdminArticles({ status: "all" })).filter((article) => articleIds.includes(article.id))
-    : await (async () => {
-        const { prisma } = await import("../lib/prisma");
-        return prisma.newsArticle.findMany({
-          where: { id: { in: articleIds } },
-          include: { category: true }
-        });
-      })();
+  const articles = (await getAdminArticles({ status: "all" })).filter((article) => articleIds.includes(article.id));
 
   // Pastram ordinea selectata
   const orderedArticles = articleIds
@@ -187,14 +130,7 @@ export async function renderNewsletterHtml(newsletterId: string): Promise<{ subj
 }
 
 export async function sendNewsletterToAllSubscribers(newsletterId: string) {
-  const subscribers: any[] = usesFirebaseData()
-    ? (await getNewsletterSubscribers()).filter((subscriber: any) => subscriber.status === "active")
-    : await (async () => {
-        const { prisma } = await import("../lib/prisma");
-        return prisma.newsletterSubscriber.findMany({
-          where: { status: "active" }
-        });
-      })();
+  const subscribers: any[] = (await getNewsletterSubscribers()).filter((subscriber: any) => subscriber.status === "active");
 
   const { subject, html } = await renderNewsletterHtml(newsletterId);
   const apiKey = process.env.RESEND_API_KEY;
@@ -228,18 +164,7 @@ export async function sendNewsletterToAllSubscribers(newsletterId: string) {
     }
   }
 
-  if (usesFirebaseData()) {
-    await getFirebaseDb().collection("newsletters").doc(newsletterId).set({ status: "sent", sentAt: new Date() }, { merge: true });
-  } else {
-    const { prisma } = await import("../lib/prisma");
-    await prisma.newsletter.update({
-      where: { id: newsletterId },
-      data: {
-        status: "sent",
-        sentAt: new Date()
-      }
-    });
-  }
+  await getFirebaseDb().collection("newsletters").doc(newsletterId).set({ status: "sent", sentAt: new Date() }, { merge: true });
 
   return subscribers.length;
 }

@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
-import { usesFirebaseData } from "./data-provider";
 import { findUserById } from "@/services/firebase-store";
 
 const SESSION_SECRET = process.env.SESSION_SECRET || "a-very-long-secret-key-of-32-characters-or-more-positive-news";
@@ -79,12 +78,5 @@ export async function getCurrentUser() {
   const session = await getSession();
   if (!session) return null;
 
-  if (usesFirebaseData()) {
-    return findUserById(session.userId);
-  }
-
-  const { prisma } = await import("./prisma");
-  return prisma.user.findUnique({
-    where: { id: session.userId }
-  });
+  return findUserById(session.userId);
 }

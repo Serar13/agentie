@@ -1,8 +1,9 @@
-import { usesFirebaseData } from "../lib/data-provider";
+import crypto from "node:crypto";
 import { getFirebaseDb } from "../lib/firebase-admin";
 import { createModelProvider } from "../agents/model-provider";
 import { modelForTier } from "../agents/model-router";
 import { uniqueSlug } from "../lib/slug";
+import { getCategories } from "./firebase-store";
 
 export type SubmissionAnalysis = {
   isPositive: boolean;
@@ -15,16 +16,11 @@ export type SubmissionAnalysis = {
 };
 
 export async function analyzeSubmission(submissionId: string): Promise<SubmissionAnalysis> {
-  const submission = usesFirebaseData()
-    ? await getFirebaseDb()
-        .collection("communitySubmissions")
-        .doc(submissionId)
-        .get()
-        .then((doc) => (doc.exists ? ({ id: doc.id, ...doc.data() } as any) : null))
-    : await (async () => {
-        const { prisma } = await import("../lib/prisma");
-        return prisma.communitySubmission.findUnique({ where: { id: submissionId } });
-      })();
+  const submission = await getFirebaseDb()
+    .collection("communitySubmissions")
+    .doc(submissionId)
+    .get()
+    .then((doc) => (doc.exists ? ({ id: doc.id, ...doc.data() } as any) : null));
 
   if (!submission) {
     throw new Error(`Submission not found: ${submissionId}`);
@@ -72,19 +68,14 @@ Returneaza raspunsul sub forma de obiect JSON valid (si nimic altceva) cu urmato
 }
 
 async function runMockAnalysis(submissionId: string): Promise<SubmissionAnalysis> {
-  const submission = usesFirebaseData()
-    ? await getFirebaseDb()
-        .collection("communitySubmissions")
-        .doc(submissionId)
-        .get()
-        .then((doc) => {
-          if (!doc.exists) throw new Error(`Submission not found: ${submissionId}`);
-          return { id: doc.id, ...doc.data() } as any;
-        })
-    : await (async () => {
-        const { prisma } = await import("../lib/prisma");
-        return prisma.communitySubmission.findUniqueOrThrow({ where: { id: submissionId } });
-      })();
+  const submission = await getFirebaseDb()
+    .collection("communitySubmissions")
+    .doc(submissionId)
+    .get()
+    .then((doc) => {
+      if (!doc.exists) throw new Error(`Submission not found: ${submissionId}`);
+      return { id: doc.id, ...doc.data() } as any;
+    });
 
   const analysis: SubmissionAnalysis = {
     isPositive: !submission.title.toLowerCase().includes("accident") && !submission.description.toLowerCase().includes("tragedie"),
@@ -102,18 +93,11 @@ async function runMockAnalysis(submissionId: string): Promise<SubmissionAnalysis
 }
 
 export async function convertSubmissionToArticle(submissionId: string) {
-  if (usesFirebaseData()) {
-    throw new Error("Conversia propunerilor in articole Firestore va fi migrata in pasul urmator.");
-  }
-
-  const { prisma } = await import("../lib/prisma");
-  const submission = await prisma.communitySubmission.findUnique({
-    where: { id: submissionId }
-  });
-
-  if (!submission) {
+  const submissionDoc = await getFirebaseDb().collection("communitySubmissions").doc(submissionId).get();
+  if (!submissionDoc.exists) {
     throw new Error(`Submission not found: ${submissionId}`);
   }
+  const submission = { id: submissionDoc.id, ...submissionDoc.data() } as any;
 
   let analysis: SubmissionAnalysis;
   if (submission.aiAnalysis) {
@@ -122,68 +106,59 @@ export async function convertSubmissionToArticle(submissionId: string) {
     analysis = await analyzeSubmission(submissionId);
   }
 
-  // Cauta categoria potrivita in DB sau foloseste prima
-  let category = await prisma.category.findFirst({
-    where: { name: { contains: submission.category } }
-  });
-
-  if (!category) {
-    category = await prisma.category.findFirst();
-  }
+  // Cauta categoria potrivita sau foloseste prima
+  const categories = await getCategories();
+  const category =
+    categories.find((c) => c.name.toLowerCase().includes(String(submission.category || "").toLowerCase())) ||
+    categories[0];
 
   if (!category) {
     throw new Error("Nu exista nicio categorie creata.");
   }
 
-  const article = await prisma.newsArticle.create({
-    data: {
-      title: analysis.draftTitle || submission.title,
-      slug: uniqueSlug(analysis.draftTitle || submission.title, Date.now()),
-      lead: analysis.draftLead || submission.description.slice(0, 200),
-      content: analysis.draftContent || submission.description,
-      categoryId: category.id,
-      status: "draft",
-      sourceName: submission.contactName || "Comunitate",
-      originalUrl: submission.sourceLink
-    }
-  });
+  const title = analysis.draftTitle || submission.title;
+  const articleId = `article_${crypto.randomUUID()}`;
+  const article = {
+    title,
+    slug: uniqueSlug(title, Date.now()),
+    lead: analysis.draftLead || submission.description.slice(0, 200),
+    content: analysis.draftContent || submission.description,
+    categoryId: category.id || category.slug,
+    categorySlug: category.slug,
+    categoryName: category.name,
+    status: "draft",
+    sourceName: submission.contactName || "Comunitate",
+    originalUrl: submission.sourceLink,
+    scannedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    positiveScore: 0,
+    confidenceScore: 0,
+    references: [
+      {
+        id: `ref_${crypto.randomUUID()}`,
+        title: submission.title,
+        outlet: "Propus de cititor",
+        url: submission.sourceLink,
+        verified: true,
+        checkedAt: new Date()
+      }
+    ]
+  };
 
-  // Salveaza referinta
-  await prisma.articleReference.create({
-    data: {
-      articleId: article.id,
-      title: submission.title,
-      outlet: "Propus de cititor",
-      url: submission.sourceLink,
-      verified: true
-    }
-  });
+  await getFirebaseDb().collection("articles").doc(articleId).set(article);
 
-  await prisma.communitySubmission.update({
-    where: { id: submissionId },
-    data: {
-      status: "converted_to_article",
-      articleId: article.id
-    }
-  });
+  await getFirebaseDb()
+    .collection("communitySubmissions")
+    .doc(submissionId)
+    .set({ status: "converted_to_article", articleId, updatedAt: new Date() }, { merge: true });
 
-  return article;
+  return { id: articleId, ...article };
 }
 
 async function saveSubmissionAnalysis(submissionId: string, analysis: SubmissionAnalysis) {
-  if (usesFirebaseData()) {
-    await getFirebaseDb()
-      .collection("communitySubmissions")
-      .doc(submissionId)
-      .set({ aiAnalysis: JSON.stringify(analysis), updatedAt: new Date() }, { merge: true });
-    return;
-  }
-
-  const { prisma } = await import("../lib/prisma");
-  await prisma.communitySubmission.update({
-    where: { id: submissionId },
-    data: {
-      aiAnalysis: JSON.stringify(analysis)
-    }
-  });
+  await getFirebaseDb()
+    .collection("communitySubmissions")
+    .doc(submissionId)
+    .set({ aiAnalysis: JSON.stringify(analysis), updatedAt: new Date() }, { merge: true });
 }

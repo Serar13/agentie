@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { usesFirebaseData } from "../data-provider";
 import { hashPassword, verifyPassword, createSession, deleteSession, getSession } from "../auth";
 import { countUsers, createUser, findUserByEmail, findUserById, updateUser } from "@/services/firebase-store";
 
@@ -21,41 +20,18 @@ export async function registerAction(formData: FormData) {
     redirect("/register?error=Emailul si parola sunt obligatorii.");
   }
 
-  const existingUser = usesFirebaseData()
-    ? await findUserByEmail(email)
-    : await (async () => {
-        const { prisma } = await import("../prisma");
-        return prisma.user.findUnique({ where: { email } });
-      })();
+  const existingUser = await findUserByEmail(email);
 
   if (existingUser) {
     redirect("/register?error=Acest email este deja inregistrat.");
   }
 
-  const count = usesFirebaseData()
-    ? await countUsers()
-    : await (async () => {
-        const { prisma } = await import("../prisma");
-        return prisma.user.count();
-      })();
+  const count = await countUsers();
   const role = count === 0 ? "admin" : "reader"; // Primul user devine admin automat!
 
   const passwordHash = hashPassword(password);
 
-  const user = usesFirebaseData()
-    ? await createUser({ email, passwordHash, name: name || null, location: location || null, role })
-    : await (async () => {
-        const { prisma } = await import("../prisma");
-        return prisma.user.create({
-          data: {
-            email,
-            passwordHash,
-            name: name || null,
-            location: location || null,
-            role
-          }
-        });
-      })();
+  const user = await createUser({ email, passwordHash, name: name || null, location: location || null, role });
 
   await createSession(user.id, user.role);
 
@@ -70,12 +46,7 @@ export async function loginAction(formData: FormData) {
     redirect("/login?error=Emailul si parola sunt obligatorii.");
   }
 
-  const user = usesFirebaseData()
-    ? await findUserByEmail(email)
-    : await (async () => {
-        const { prisma } = await import("../prisma");
-        return prisma.user.findUnique({ where: { email } });
-      })();
+  const user = await findUserByEmail(email);
 
   if (!user || !verifyPassword(password, user.passwordHash)) {
     redirect("/login?error=Email sau parola incorecta.");
@@ -99,12 +70,7 @@ export async function toggleSavedArticleAction(articleId: string) {
   const session = await getSession();
   if (!session) return { error: "Trebuie sa fii autentificat." };
 
-  const user = usesFirebaseData()
-    ? await findUserById(session.userId)
-    : await (async () => {
-        const { prisma } = await import("../prisma");
-        return prisma.user.findUnique({ where: { id: session.userId } });
-      })();
+  const user = await findUserById(session.userId);
 
   if (!user) return { error: "Utilizator inexistent." };
 
@@ -117,15 +83,7 @@ export async function toggleSavedArticleAction(articleId: string) {
     saved.push(articleId);
   }
 
-  if (usesFirebaseData()) {
-    await updateUser(user.id, { savedArticles: saved.join(",") });
-  } else {
-    const { prisma } = await import("../prisma");
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { savedArticles: saved.join(",") }
-    });
-  }
+  await updateUser(user.id, { savedArticles: saved.join(",") });
 
   revalidatePath("/");
   revalidatePath(`/articles/[slug]`, "layout");
@@ -137,12 +95,7 @@ export async function toggleFollowCategoryAction(categorySlug: string) {
   const session = await getSession();
   if (!session) return { error: "Trebuie sa fii autentificat." };
 
-  const user = usesFirebaseData()
-    ? await findUserById(session.userId)
-    : await (async () => {
-        const { prisma } = await import("../prisma");
-        return prisma.user.findUnique({ where: { id: session.userId } });
-      })();
+  const user = await findUserById(session.userId);
 
   if (!user) return { error: "Utilizator inexistent." };
 
@@ -155,15 +108,7 @@ export async function toggleFollowCategoryAction(categorySlug: string) {
     followed.push(categorySlug);
   }
 
-  if (usesFirebaseData()) {
-    await updateUser(user.id, { followedCategories: followed.join(",") });
-  } else {
-    const { prisma } = await import("../prisma");
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { followedCategories: followed.join(",") }
-    });
-  }
+  await updateUser(user.id, { followedCategories: followed.join(",") });
 
   revalidatePath("/");
   revalidatePath("/cont");

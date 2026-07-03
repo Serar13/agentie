@@ -7,7 +7,6 @@ import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { getAdminArticles as getFirebaseAdminArticles, getCategories, getUniqueSources } from "@/services/firebase-store";
-import { usesFirebaseData } from "@/lib/data-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -49,48 +48,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const monthlyUsagePercent = monthlyLimit > 0 ? (costSummary.monthlyCost / monthlyLimit) * 100 : 0;
 
   // Interogam categoriile si sursele pentru filtre
-  const [categories, uniqueSources] = usesFirebaseData()
-    ? await Promise.all([getCategories(), getUniqueSources()])
-    : await (async () => {
-        const { prisma } = await import("@/lib/prisma");
-        return Promise.all([
-          prisma.category.findMany({ orderBy: { name: "asc" } }),
-          prisma.newsArticle.findMany({
-            where: { sourceName: { not: null } },
-            select: { sourceName: true },
-            distinct: ["sourceName"]
-          })
-        ]);
-      })();
+  const [categories, uniqueSources] = await Promise.all([getCategories(), getUniqueSources()]);
 
-  // Constructia query-ului de cautare
-  const whereClause: any = {};
-
-  if (status !== "all") {
-    whereClause.status = status;
-  }
-  if (categoryId !== "all") {
-    whereClause.categoryId = categoryId;
-  }
-  if (riskLevel !== "all") {
-    whereClause.riskLevel = riskLevel;
-  }
-  if (scoreFilter === "low_positive") {
-    whereClause.positiveScore = { lt: 75 };
-  } else if (scoreFilter === "low_confidence") {
-    whereClause.confidenceScore = { lt: 80 };
-  }
-
-  const articles = usesFirebaseData()
-    ? await getFirebaseAdminArticles({ status, categoryId, riskLevel, scoreFilter, sort })
-    : await (async () => {
-        const { prisma } = await import("@/lib/prisma");
-        return prisma.newsArticle.findMany({
-          where: whereClause,
-          include: { category: true },
-          orderBy: { updatedAt: sort === "asc" ? "asc" : "desc" }
-        });
-      })();
+  const articles = await getFirebaseAdminArticles({ status, categoryId, riskLevel, scoreFilter, sort });
 
   return (
     <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6">

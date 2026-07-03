@@ -3,7 +3,6 @@ import { getAnalyticsSummary } from "@/services/analytics-service";
 import { getDonationStats } from "@/services/donation-service";
 import { getCostSummary } from "@/services/cost-tracker";
 import { formatCurrency } from "@/lib/format";
-import { usesFirebaseData } from "@/lib/data-provider";
 import { getTotalsFirebase } from "@/services/firebase-store";
 
 export const dynamic = "force-dynamic";
@@ -48,18 +47,7 @@ export default async function AdminAnalyticsPage() {
     getAnalyticsSummary(),
     getDonationStats(),
     getCostSummary(),
-    usesFirebaseData()
-      ? getTotalsFirebase()
-      : (async () => {
-          const { prisma } = await import("@/lib/prisma");
-          return Promise.all([
-            prisma.user.count(),
-            prisma.user.count({ where: { role: "admin" } }),
-            prisma.newsletterSubscriber.count({ where: { status: "active" } }),
-            prisma.newsArticle.count({ where: { status: "published" } }),
-            prisma.communitySubmission.count()
-          ]);
-        })()
+    getTotalsFirebase()
   ]);
 
   const [usersCount, adminsCount, subscribersCount, publishedCount, submissionsCount] = totals;

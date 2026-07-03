@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import { usesFirebaseData } from "../lib/data-provider";
 import { uniqueSlug } from "../lib/slug";
 import { fetchRssItems, type RssItem } from "./rss";
 import { inferCategorySlug } from "./category-router";
@@ -29,94 +28,26 @@ function hashUrl(url: string) {
 }
 
 export async function saveCandidateAsDraft(item: RssItem, defaultCategoryId?: string | null) {
-  if (usesFirebaseData()) {
-    const snap = await getFirebaseDb()
-      .collection("articles")
-      .where("originalUrl", "==", item.url)
-      .limit(1)
-      .get();
+  const snap = await getFirebaseDb()
+    .collection("articles")
+    .where("originalUrl", "==", item.url)
+    .limit(1)
+    .get();
 
-    if (!snap.empty) {
-      return { created: false, isDuplicate: true, articleId: snap.docs[0].id };
-    }
-
-    const categories = await getCategories();
-    let categoryId = defaultCategoryId;
-
-    if (!categoryId) {
-      const categorySlug = inferCategorySlug(`${item.title} ${item.excerpt ?? ""}`);
-      const category = categories.find((c) => c.slug === categorySlug);
-      if (category) {
-        categoryId = category.id || category.slug;
-      } else {
-        categoryId = categories[0]?.id || categories[0]?.slug || "";
-      }
-    }
-
-    if (!categoryId) {
-      throw new Error("Nu exista nicio categorie definita in sistem.");
-    }
-
-    const matchedCategory = categories.find((c) => c.id === categoryId || c.slug === categoryId);
-    const categorySlug = matchedCategory?.slug || "general";
-    const categoryName = matchedCategory?.name || "General";
-
-    const articleId = `article_${crypto.randomUUID()}`;
-    const article = {
-      title: item.title,
-      slug: uniqueSlug(item.title, Date.now()),
-      lead: item.excerpt?.slice(0, 280) || "Draft capturat din sursa RSS. Necesita research si verificare.",
-      content: item.excerpt || "Draft capturat din sursa RSS. Pipeline-ul trebuie sa completeze articolul doar pe baza surselor.",
-      categoryId: categoryId,
-      categorySlug: categorySlug,
-      categoryName: categoryName,
-      status: "draft",
-      sourceName: item.sourceName,
-      originalUrl: item.url,
-      scannedAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      positiveScore: 0,
-      confidenceScore: 0,
-      references: [
-        {
-          id: `ref_${crypto.randomUUID()}`,
-          title: item.title,
-          outlet: item.sourceName,
-          url: item.url,
-          verified: false,
-          checkedAt: new Date()
-        }
-      ]
-    };
-
-    await getFirebaseDb().collection("articles").doc(articleId).set(article);
-    return { created: true, isDuplicate: false, articleId };
+  if (!snap.empty) {
+    return { created: false, isDuplicate: true, articleId: snap.docs[0].id };
   }
 
-  const { prisma } = await import("../lib/prisma");
-  const duplicate = await prisma.newsArticle.findFirst({
-    where: {
-      originalUrl: item.url
-    },
-    select: { id: true }
-  });
-
-  if (duplicate) return { created: false, isDuplicate: true, articleId: duplicate.id };
-
+  const categories = await getCategories();
   let categoryId = defaultCategoryId;
 
   if (!categoryId) {
     const categorySlug = inferCategorySlug(`${item.title} ${item.excerpt ?? ""}`);
-    const category = await prisma.category.findUnique({
-      where: { slug: categorySlug }
-    });
+    const category = categories.find((c) => c.slug === categorySlug);
     if (category) {
-      categoryId = category.id;
+      categoryId = category.id || category.slug;
     } else {
-      // Fallback la prima categorie daca nu gasim potrivire
-      const firstCat = await prisma.category.findFirst();
-      categoryId = firstCat?.id || "";
+      categoryId = categories[0]?.id || categories[0]?.slug || "";
     }
   }
 
@@ -124,34 +55,41 @@ export async function saveCandidateAsDraft(item: RssItem, defaultCategoryId?: st
     throw new Error("Nu exista nicio categorie definita in sistem.");
   }
 
-  const article = await prisma.newsArticle.create({
-    data: {
-      title: item.title,
-      slug: uniqueSlug(item.title, Date.now()),
-      lead: item.excerpt?.slice(0, 280) || "Draft capturat din sursa RSS. Necesita research si verificare.",
-      content:
-        item.excerpt || "Draft capturat din sursa RSS. Pipeline-ul trebuie sa completeze articolul doar pe baza surselor.",
-      categoryId: categoryId,
-      status: "draft",
-      sourceName: item.sourceName,
-      originalUrl: item.url,
-      scannedAt: new Date(),
-      positiveScore: 0,
-      confidenceScore: 0
-    }
-  });
+  const matchedCategory = categories.find((c) => c.id === categoryId || c.slug === categoryId);
+  const categorySlug = matchedCategory?.slug || "general";
+  const categoryName = matchedCategory?.name || "General";
 
-  await prisma.articleReference.create({
-    data: {
-      articleId: article.id,
-      title: item.title,
-      outlet: item.sourceName,
-      url: item.url,
-      verified: false
-    }
-  });
+  const articleId = `article_${crypto.randomUUID()}`;
+  const article = {
+    title: item.title,
+    slug: uniqueSlug(item.title, Date.now()),
+    lead: item.excerpt?.slice(0, 280) || "Draft capturat din sursa RSS. Necesita research si verificare.",
+    content: item.excerpt || "Draft capturat din sursa RSS. Pipeline-ul trebuie sa completeze articolul doar pe baza surselor.",
+    categoryId: categoryId,
+    categorySlug: categorySlug,
+    categoryName: categoryName,
+    status: "draft",
+    sourceName: item.sourceName,
+    originalUrl: item.url,
+    scannedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    positiveScore: 0,
+    confidenceScore: 0,
+    references: [
+      {
+        id: `ref_${crypto.randomUUID()}`,
+        title: item.title,
+        outlet: item.sourceName,
+        url: item.url,
+        verified: false,
+        checkedAt: new Date()
+      }
+    ]
+  };
 
-  return { created: true, isDuplicate: false, articleId: article.id };
+  await getFirebaseDb().collection("articles").doc(articleId).set(article);
+  return { created: true, isDuplicate: false, articleId };
 }
 
 export async function scanConfiguredSources(limitPerSource = 15): Promise<ScanResult> {
@@ -163,24 +101,12 @@ export async function scanConfiguredSources(limitPerSource = 15): Promise<ScanRe
     errors: []
   };
 
-  let sources: any[] = [];
-  if (usesFirebaseData()) {
-    const snap = await getFirebaseDb()
-      .collection("sources")
-      .where("status", "==", "active")
-      .where("type", "==", "rss")
-      .get();
-    sources = snap.docs.map((doc) => fromDoc(doc));
-  } else {
-    const { prisma } = await import("../lib/prisma");
-    sources = await prisma.source.findMany({
-      where: {
-        status: "active",
-        type: "rss"
-      },
-      orderBy: { createdAt: "asc" }
-    });
-  }
+  const sourcesSnap = await getFirebaseDb()
+    .collection("sources")
+    .where("status", "==", "active")
+    .where("type", "==", "rss")
+    .get();
+  const sources: any[] = sourcesSnap.docs.map((doc) => fromDoc(doc));
 
   for (const source of sources) {
     result.scannedSources += 1;
@@ -193,47 +119,20 @@ export async function scanConfiguredSources(limitPerSource = 15): Promise<ScanRe
       const now = new Date();
       let items: RssItem[] = [];
 
-      if (usesFirebaseData()) {
-        const cacheDoc = await getFirebaseDb().collection("scanCache").doc(cacheKey).get();
-        const cache = cacheDoc.exists ? cacheDoc.data() : null;
-        const expiresAt = cache?.expiresAt?.toDate ? cache.expiresAt.toDate() : null;
-        if (cache && expiresAt && expiresAt > now) {
-          items = JSON.parse(cache.payload) as RssItem[];
-        } else {
-          items = await fetchRssItems(source.url, source.name);
-          await getFirebaseDb().collection("scanCache").doc(cacheKey).set({
-            urlHash: cacheKey,
-            originalUrl: source.url,
-            payload: JSON.stringify(items),
-            fetchedAt: now,
-            expiresAt: new Date(Date.now() + 30 * 60 * 1000)
-          });
-        }
+      const cacheDoc = await getFirebaseDb().collection("scanCache").doc(cacheKey).get();
+      const cache = cacheDoc.exists ? cacheDoc.data() : null;
+      const expiresAt = cache?.expiresAt?.toDate ? cache.expiresAt.toDate() : null;
+      if (cache && expiresAt && expiresAt > now) {
+        items = JSON.parse(cache.payload) as RssItem[];
       } else {
-        const { prisma } = await import("../lib/prisma");
-        const cache = await prisma.scanCache.findUnique({
-          where: { urlHash: cacheKey }
+        items = await fetchRssItems(source.url, source.name);
+        await getFirebaseDb().collection("scanCache").doc(cacheKey).set({
+          urlHash: cacheKey,
+          originalUrl: source.url,
+          payload: JSON.stringify(items),
+          fetchedAt: now,
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000)
         });
-
-        if (cache && cache.expiresAt > now) {
-          items = JSON.parse(cache.payload) as RssItem[];
-        } else {
-          items = await fetchRssItems(source.url, source.name);
-          await prisma.scanCache.upsert({
-            where: { urlHash: cacheKey },
-            create: {
-              urlHash: cacheKey,
-              originalUrl: source.url,
-              payload: JSON.stringify(items),
-              expiresAt: new Date(Date.now() + 30 * 60 * 1000)
-            },
-            update: {
-              payload: JSON.stringify(items),
-              fetchedAt: now,
-              expiresAt: new Date(Date.now() + 30 * 60 * 1000)
-            }
-          });
-        }
       }
 
       const blacklist = source.blacklistKeywords
@@ -275,29 +174,16 @@ export async function scanConfiguredSources(limitPerSource = 15): Promise<ScanRe
         }
       }
 
-      if (usesFirebaseData()) {
-        const docRef = getFirebaseDb().collection("sources").doc(source.id);
-        const docSnap = await docRef.get();
-        const currentData = docSnap.exists ? docSnap.data() : {};
-        await docRef.set({
-          lastScannedAt: new Date(),
-          articlesExtracted: (currentData?.articlesExtracted || 0) + localExtracted,
-          articlesAccepted: (currentData?.articlesAccepted || 0) + localAccepted,
-          articlesRejected: (currentData?.articlesRejected || 0) + localRejected,
-          updatedAt: new Date()
-        }, { merge: true });
-      } else {
-        const { prisma } = await import("../lib/prisma");
-        await prisma.source.update({
-          where: { id: source.id },
-          data: {
-            lastScannedAt: new Date(),
-            articlesExtracted: { increment: localExtracted },
-            articlesAccepted: { increment: localAccepted },
-            articlesRejected: { increment: localRejected }
-          }
-        });
-      }
+      const docRef = getFirebaseDb().collection("sources").doc(source.id);
+      const docSnap = await docRef.get();
+      const currentData = docSnap.exists ? docSnap.data() : {};
+      await docRef.set({
+        lastScannedAt: new Date(),
+        articlesExtracted: (currentData?.articlesExtracted || 0) + localExtracted,
+        articlesAccepted: (currentData?.articlesAccepted || 0) + localAccepted,
+        articlesRejected: (currentData?.articlesRejected || 0) + localRejected,
+        updatedAt: new Date()
+      }, { merge: true });
     } catch (error) {
       result.errors.push({
         source: source.name,

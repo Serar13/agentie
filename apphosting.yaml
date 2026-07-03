@@ -7,8 +7,6 @@ runConfig:
   memoryMiB: 512
 
 env:
-  - variable: DATA_PROVIDER
-    value: firebase
   - variable: NEXT_PUBLIC_APP_URL
     value: https://positive-news-agency--positivenews-c6511.us-central1.hosted.app
   - variable: MODEL_PROVIDER

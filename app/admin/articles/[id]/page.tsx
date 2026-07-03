@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArticleEditor } from "@/components/ArticleEditor";
 import { getArticleForEdit } from "@/services/news-service";
-import { usesFirebaseData } from "@/lib/data-provider";
 import { getCategories } from "@/services/firebase-store";
 
 export const dynamic = "force-dynamic";
@@ -13,15 +12,7 @@ type PageProps = {
 
 export default async function AdminArticlePage({ params }: PageProps) {
   const { id } = await params;
-  const [article, categories] = await Promise.all([
-    getArticleForEdit(id),
-    usesFirebaseData()
-      ? getCategories()
-      : (async () => {
-          const { prisma } = await import("@/lib/prisma");
-          return prisma.category.findMany({ orderBy: { name: "asc" } });
-        })()
-  ]);
+  const [article, categories] = await Promise.all([getArticleForEdit(id), getCategories()]);
 
   if (!article) notFound();
 

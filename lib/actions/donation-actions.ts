@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { createStripeCheckoutSession, createMockDonation, createMockSubscription } from "../../services/donation-service";
 import { trackEvent } from "../../services/analytics-service";
 import { getRequiredSession } from "../auth-helpers";
-import { usesFirebaseData } from "../data-provider";
 import { findUserById } from "@/services/firebase-store";
 
 function getField(formData: FormData, name: string): string {
@@ -14,12 +13,7 @@ function getField(formData: FormData, name: string): string {
 
 export async function createDonationSessionAction(formData: FormData) {
   const authSession = await getRequiredSession();
-  const user = usesFirebaseData()
-    ? await findUserById(authSession.userId)
-    : await (async () => {
-        const { prisma } = await import("../prisma");
-        return prisma.user.findUnique({ where: { id: authSession.userId } });
-      })();
+  const user = await findUserById(authSession.userId);
   if (!user) redirect("/login?error=Contul nu a fost gasit.");
 
   const email = user.email;
@@ -53,12 +47,7 @@ export async function createDonationSessionAction(formData: FormData) {
 
 export async function createMockDonationAction(formData: FormData) {
   const authSession = await getRequiredSession();
-  const user = usesFirebaseData()
-    ? await findUserById(authSession.userId)
-    : await (async () => {
-        const { prisma } = await import("../prisma");
-        return prisma.user.findUnique({ where: { id: authSession.userId } });
-      })();
+  const user = await findUserById(authSession.userId);
   if (!user) redirect("/login?error=Contul nu a fost gasit.");
 
   const email = user.email;

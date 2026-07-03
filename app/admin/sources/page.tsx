@@ -1,5 +1,4 @@
 import { addSource, updateSource, deleteSource } from "@/lib/actions/source-actions";
-import { usesFirebaseData } from "@/lib/data-provider";
 import { getCategories, listSources } from "@/services/firebase-store";
 
 export const dynamic = "force-dynamic";
@@ -23,18 +22,7 @@ type CategoryRow = {
 };
 
 export default async function AdminSourcesPage() {
-  const [sources, categories] = usesFirebaseData()
-    ? await Promise.all([listSources(), getCategories()])
-    : await (async () => {
-        const { prisma } = await import("@/lib/prisma");
-        return Promise.all([
-          prisma.source.findMany({
-            include: { category: true },
-            orderBy: { createdAt: "desc" }
-          }),
-          prisma.category.findMany({ orderBy: { name: "asc" } })
-        ]);
-      })();
+  const [sources, categories] = await Promise.all([listSources(), getCategories()]);
 
   return (
     <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6">

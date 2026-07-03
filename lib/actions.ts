@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { runPipelineForArticle } from "../agents/pipeline";
 import { STATUS_VALUES, type ArticleStatus } from "./constants";
-import { usesFirebaseData } from "./data-provider";
 import { uniqueSlug } from "./slug";
 import { getSession } from "./auth";
 import {
@@ -36,33 +35,14 @@ export async function subscribeNewsletter(formData: FormData) {
     return;
   }
 
-  const user = usesFirebaseData()
-    ? await findUserById(session.userId)
-    : await (async () => {
-        const { prisma } = await import("./prisma");
-        return prisma.user.findUnique({ where: { id: session.userId } });
-      })();
+  const user = await findUserById(session.userId);
 
   if (!user || user.email.toLowerCase() !== email) {
     redirect("/cont?error=Newsletterul trebuie activat cu emailul contului tau.");
   }
 
-  if (usesFirebaseData()) {
-    await upsertNewsletterSubscriber(email);
-    await updateUser(user.id, { newsletterOptIn: true });
-  } else {
-    const { prisma } = await import("./prisma");
-    await prisma.newsletterSubscriber.upsert({
-      where: { email },
-      create: { email, source: "website" },
-      update: { status: "active" }
-    });
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { newsletterOptIn: true }
-    });
-  }
+  await upsertNewsletterSubscriber(email);
+  await updateUser(user.id, { newsletterOptIn: true });
 
   revalidatePath("/");
   revalidatePath("/support");
@@ -72,54 +52,34 @@ export async function subscribeNewsletter(formData: FormData) {
 export async function updateArticleStatus(formData: FormData) {
   const id = field(formData, "id");
   const status = safeStatus(field(formData, "status"));
-  const article = usesFirebaseData()
-    ? await getFirebaseArticleForEdit(id)
-    : await (async () => {
-        const { prisma } = await import("./prisma");
-        return prisma.newsArticle.findUnique({ where: { id } });
-      })();
+  const article = await getFirebaseArticleForEdit(id);
 
   if (!article) return;
 
   if (status === "published" || status === "approved") {
     if (article.positiveScore < 75) {
-      const data = {
-          status: "needs_review",
-          qualityNotes: `Aprobare/Publicare blocata: Scorul pozitiv (${article.positiveScore}) este sub pragul de 75.`
-      };
-      if (usesFirebaseData()) await updateArticleStatusFirebase(id, data);
-      else {
-        const { prisma } = await import("./prisma");
-        await prisma.newsArticle.update({ where: { id }, data });
-      }
+      await updateArticleStatusFirebase(id, {
+        status: "needs_review",
+        qualityNotes: `Aprobare/Publicare blocata: Scorul pozitiv (${article.positiveScore}) este sub pragul de 75.`
+      });
       revalidatePath("/");
       revalidatePath("/admin");
       return;
     }
     if (article.confidenceScore < 80) {
-      const data = {
-          status: "needs_review",
-          qualityNotes: `Aprobare/Publicare blocata: Scorul de incredere (${article.confidenceScore}) este sub pragul de 80.`
-      };
-      if (usesFirebaseData()) await updateArticleStatusFirebase(id, data);
-      else {
-        const { prisma } = await import("./prisma");
-        await prisma.newsArticle.update({ where: { id }, data });
-      }
+      await updateArticleStatusFirebase(id, {
+        status: "needs_review",
+        qualityNotes: `Aprobare/Publicare blocata: Scorul de incredere (${article.confidenceScore}) este sub pragul de 80.`
+      });
       revalidatePath("/");
       revalidatePath("/admin");
       return;
     }
     if (article.riskLevel === "high") {
-      const data = {
-          status: "needs_review",
-          qualityNotes: "Aprobare/Publicare blocata: Nivelul de risc este High. Necesita rezolvarea problemelor."
-      };
-      if (usesFirebaseData()) await updateArticleStatusFirebase(id, data);
-      else {
-        const { prisma } = await import("./prisma");
-        await prisma.newsArticle.update({ where: { id }, data });
-      }
+      await updateArticleStatusFirebase(id, {
+        status: "needs_review",
+        qualityNotes: "Aprobare/Publicare blocata: Nivelul de risc este High. Necesita rezolvarea problemelor."
+      });
       revalidatePath("/");
       revalidatePath("/admin");
       return;
@@ -127,26 +87,16 @@ export async function updateArticleStatus(formData: FormData) {
   }
 
   if (status === "published" && article.status !== "approved" && article.status !== "published") {
-    const data = {
-        status: "needs_review",
-        qualityNotes: "Publicarea a fost blocata: articolul trebuie aprobat manual inainte."
-    };
-    if (usesFirebaseData()) await updateArticleStatusFirebase(id, data);
-    else {
-      const { prisma } = await import("./prisma");
-      await prisma.newsArticle.update({ where: { id }, data });
-    }
+    await updateArticleStatusFirebase(id, {
+      status: "needs_review",
+      qualityNotes: "Publicarea a fost blocata: articolul trebuie aprobat manual inainte."
+    });
   } else {
-    const data = {
-        status,
-        approvedAt: status === "approved" ? new Date() : article.approvedAt,
-        publishedAt: status === "published" ? new Date() : status === "approved" ? null : article.publishedAt
-    };
-    if (usesFirebaseData()) await updateArticleStatusFirebase(id, data);
-    else {
-      const { prisma } = await import("./prisma");
-      await prisma.newsArticle.update({ where: { id }, data });
-    }
+    await updateArticleStatusFirebase(id, {
+      status,
+      approvedAt: status === "approved" ? new Date() : article.approvedAt,
+      publishedAt: status === "published" ? new Date() : status === "approved" ? null : article.publishedAt
+    });
   }
 
   revalidatePath("/");
@@ -187,33 +137,23 @@ export async function saveArticle(formData: FormData) {
       socialLinkedin: field(formData, "socialLinkedin") || null
     };
 
-  if (usesFirebaseData()) {
-    await updateArticleFirebase(id, articleData);
-  } else {
-    const { prisma } = await import("./prisma");
-    await prisma.newsArticle.update({
-      where: { id },
-      data: articleData
-    });
-  }
+  await updateArticleFirebase(id, articleData);
 
-  if (referenceUrl && !usesFirebaseData()) {
-    const { prisma } = await import("./prisma");
-    const existing = await prisma.articleReference.findFirst({
-      where: { articleId: id, url: referenceUrl }
-    });
+  if (referenceUrl) {
+    const article = await getFirebaseArticleForEdit(id);
+    const references: any[] = article?.references || [];
+    const existing = references.find((ref) => ref.url === referenceUrl);
 
     if (!existing) {
-      await prisma.articleReference.create({
-        data: {
-          articleId: id,
-          title: referenceTitle,
-          outlet: referenceOutlet,
-          url: referenceUrl,
-          verified: field(formData, "referenceVerified") === "on",
-          checkedAt: field(formData, "referenceVerified") === "on" ? new Date() : null
-        }
+      references.push({
+        id: `ref_${Date.now()}`,
+        title: referenceTitle,
+        outlet: referenceOutlet,
+        url: referenceUrl,
+        verified: field(formData, "referenceVerified") === "on",
+        checkedAt: field(formData, "referenceVerified") === "on" ? new Date() : null
       });
+      await updateArticleFirebase(id, { references });
     }
   }
 
@@ -225,28 +165,18 @@ export async function saveArticle(formData: FormData) {
 
 export async function regenerateSocialCopy(formData: FormData) {
   const id = field(formData, "id");
-  const article = usesFirebaseData()
-    ? await getFirebaseArticleForEdit(id)
-    : await (async () => {
-        const { prisma } = await import("./prisma");
-        return prisma.newsArticle.findUnique({ where: { id } });
-      })();
+  const article = await getFirebaseArticleForEdit(id);
   if (!article) return;
 
   const cleanTitle = article.title.replace(/^DEMO:\s*/i, "").trim();
-  const data = {
-      seoTitle: article.title,
-      metaDescription: article.lead.slice(0, 155),
-      socialFacebook: `${cleanTitle}\n\nFara reclame. Fara panica. Doar vesti bune, verificate.`,
-      socialInstagram: `${cleanTitle}\n\nO veste buna pe zi schimba ritmul informatiei. #vestibune #stiripozitive`,
-      socialLinkedin: `${cleanTitle}\n\nUn exemplu de progres verificabil, pregatit pentru cititori fara clickbait.`,
-      newsletterBlurb: `5 vesti bune in 5 minute: ${article.lead}`
-  };
-  if (usesFirebaseData()) await updateArticleFirebase(id, data);
-  else {
-    const { prisma } = await import("./prisma");
-    await prisma.newsArticle.update({ where: { id }, data });
-  }
+  await updateArticleFirebase(id, {
+    seoTitle: article.title,
+    metaDescription: article.lead.slice(0, 155),
+    socialFacebook: `${cleanTitle}\n\nFara reclame. Fara panica. Doar vesti bune, verificate.`,
+    socialInstagram: `${cleanTitle}\n\nO veste buna pe zi schimba ritmul informatiei. #vestibune #stiripozitive`,
+    socialLinkedin: `${cleanTitle}\n\nUn exemplu de progres verificabil, pregatit pentru cititori fara clickbait.`,
+    newsletterBlurb: `5 vesti bune in 5 minute: ${article.lead}`
+  });
 
   revalidatePath(`/admin/articles/${id}`);
 }

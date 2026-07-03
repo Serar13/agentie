@@ -1,7 +1,6 @@
 import { createNewsletterAction, sendNewsletterAction } from "@/lib/actions/newsletter-actions";
 import { renderNewsletterHtml } from "@/services/newsletter-service";
 import { formatDateTime } from "@/lib/format";
-import { usesFirebaseData } from "@/lib/data-provider";
 import { getFirebaseDb } from "@/lib/firebase-admin";
 import { getAdminArticles } from "@/services/firebase-store";
 
@@ -39,32 +38,19 @@ export default async function AdminNewsletterPage({ searchParams }: PageProps) {
   const params = searchParams ? await searchParams : {};
   const previewId = typeof params.preview === "string" ? params.preview : undefined;
 
-  const [subscribers, approvedArticles, campaigns] = usesFirebaseData()
-    ? await Promise.all([
-        getFirebaseDb()
-          .collection("newsletterSubscribers")
-          .get()
-          .then((snap) => snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toDate?.() || new Date() })) as any[]),
-        getAdminArticles({ status: "all" }).then((articles) =>
-          articles.filter((article) => ["approved", "published"].includes(article.status)).slice(0, 20)
-        ),
-        getFirebaseDb()
-          .collection("newsletters")
-          .get()
-          .then((snap) => snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toDate?.() || new Date() })) as any[])
-      ])
-    : await (async () => {
-        const { prisma } = await import("@/lib/prisma");
-        return Promise.all([
-          prisma.newsletterSubscriber.findMany({ orderBy: { createdAt: "desc" } }),
-          prisma.newsArticle.findMany({
-            where: { status: { in: ["approved", "published"] } },
-            orderBy: { updatedAt: "desc" },
-            take: 20
-          }),
-          prisma.newsletter.findMany({ orderBy: { createdAt: "desc" } })
-        ]);
-      })();
+  const [subscribers, approvedArticles, campaigns] = await Promise.all([
+    getFirebaseDb()
+      .collection("newsletterSubscribers")
+      .get()
+      .then((snap) => snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toDate?.() || new Date() })) as any[]),
+    getAdminArticles({ status: "all" }).then((articles) =>
+      articles.filter((article) => ["approved", "published"].includes(article.status)).slice(0, 20)
+    ),
+    getFirebaseDb()
+      .collection("newsletters")
+      .get()
+      .then((snap) => snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toDate?.() || new Date() })) as any[])
+  ]);
 
   let previewData: { subject: string; html: string } | null = null;
   if (previewId) {

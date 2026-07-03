@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { NewsletterForm } from "@/components/NewsletterForm";
 import { formatDate } from "@/lib/format";
 import { getPublishedArticleBySlug } from "@/services/firebase-store";
-import { usesFirebaseData } from "@/lib/data-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -14,15 +13,7 @@ type PageProps = {
 
 export default async function ArticlePage({ params }: PageProps) {
   const { slug } = await params;
-  const article = usesFirebaseData()
-    ? await getPublishedArticleBySlug(slug)
-    : await (async () => {
-        const { prisma } = await import("@/lib/prisma");
-        return prisma.newsArticle.findFirst({
-          where: { slug, status: "published" },
-          include: { category: true, references: true }
-        });
-      })();
+  const article = await getPublishedArticleBySlug(slug);
 
   if (!article) notFound();
 

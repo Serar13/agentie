@@ -4,7 +4,6 @@ import {
   rejectSubmissionAction
 } from "@/lib/actions/submission-actions";
 import { formatDateTime } from "@/lib/format";
-import { usesFirebaseData } from "@/lib/data-provider";
 import { listSubmissions } from "@/services/firebase-store";
 
 export const dynamic = "force-dynamic";
@@ -24,14 +23,7 @@ type SubmissionRow = {
 };
 
 export default async function AdminSubmissionsPage() {
-  const submissions = (usesFirebaseData()
-    ? await listSubmissions()
-    : await (async () => {
-        const { prisma } = await import("@/lib/prisma");
-        return prisma.communitySubmission.findMany({
-          orderBy: { createdAt: "desc" }
-        });
-      })()) as SubmissionRow[];
+  const submissions = (await listSubmissions()) as SubmissionRow[];
 
   return (
     <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6">

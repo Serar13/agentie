@@ -1,4 +1,3 @@
-import { usesFirebaseData } from "../lib/data-provider";
 import { BUDGET_TARGETS } from "../lib/constants";
 import { getCostSummaryFirebase, logCostFirebase } from "./firebase-store";
 
@@ -39,68 +38,18 @@ export async function logAgentCost(params: {
   const outputTokens = estimateTokens(params.output);
   const estimatedCostEur = estimateRunCost(params.model, inputTokens, outputTokens);
 
-  if (usesFirebaseData()) {
-    return logCostFirebase({
-      articleId: params.articleId || null,
-      agentName: params.agentName,
-      model: params.model,
-      inputTokens,
-      outputTokens,
-      estimatedCostEur
-    });
-  }
-
-  const { prisma } = await import("../lib/prisma");
-  return prisma.costLog.create({
-    data: {
-      articleId: params.articleId,
-      agentName: params.agentName,
-      model: params.model,
-      inputTokens,
-      outputTokens,
-      estimatedCostEur
-    }
+  return logCostFirebase({
+    articleId: params.articleId || null,
+    agentName: params.agentName,
+    model: params.model,
+    inputTokens,
+    outputTokens,
+    estimatedCostEur
   });
 }
 
 export async function getCostSummary() {
-  if (usesFirebaseData()) {
-    return getCostSummaryFirebase();
-  }
-
-  const { prisma } = await import("../lib/prisma");
-  const now = new Date();
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  const [daily, monthly, articlesThisMonth] = await Promise.all([
-    prisma.costLog.aggregate({
-      where: { createdAt: { gte: startOfDay } },
-      _sum: { estimatedCostEur: true, inputTokens: true, outputTokens: true }
-    }),
-    prisma.costLog.aggregate({
-      where: { createdAt: { gte: startOfMonth } },
-      _sum: { estimatedCostEur: true, inputTokens: true, outputTokens: true }
-    }),
-    prisma.newsArticle.count({
-      where: {
-        createdAt: { gte: startOfMonth },
-        status: { in: ["approved", "published"] }
-      }
-    })
-  ]);
-
-  const monthCost = monthly._sum.estimatedCostEur ?? 0;
-
-  return {
-    dailyCost: daily._sum.estimatedCostEur ?? 0,
-    monthlyCost: monthCost,
-    inputTokensMonth: monthly._sum.inputTokens ?? 0,
-    outputTokensMonth: monthly._sum.outputTokens ?? 0,
-    articlesThisMonth,
-    averageCostPerArticle: articlesThisMonth > 0 ? monthCost / articlesThisMonth : 0
-  };
+  return getCostSummaryFirebase();
 }
 
 export async function checkBudgetLimits(): Promise<{ exceeded: boolean; reason?: string }> {

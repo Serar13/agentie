@@ -1,6 +1,5 @@
 import { BUDGET_TARGETS } from "../lib/constants";
 import { formatCurrency } from "../lib/format";
-import { prisma } from "../lib/prisma";
 import { getCostSummary } from "../services/cost-tracker";
 
 async function main() {
@@ -18,11 +17,7 @@ async function main() {
   });
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

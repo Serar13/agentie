@@ -1,5 +1,4 @@
 import { runPipelineForPendingDrafts } from "../agents/pipeline";
-import { prisma } from "../lib/prisma";
 
 async function main() {
   const limit = Number(process.argv[2] ?? 10);
@@ -17,11 +16,7 @@ async function main() {
   );
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

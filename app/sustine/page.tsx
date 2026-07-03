@@ -2,7 +2,6 @@ import Link from "next/link";
 import { getDonationStats } from "@/services/donation-service";
 import { createMockDonationAction, createDonationSessionAction } from "@/lib/actions/donation-actions";
 import { getSession } from "@/lib/auth";
-import { usesFirebaseData } from "@/lib/data-provider";
 import { findUserById } from "@/services/firebase-store";
 
 export const dynamic = "force-dynamic";
@@ -19,14 +18,7 @@ export default async function SupportUsPage({ searchParams }: PageProps) {
   const params = searchParams ? await searchParams : {};
   const stats = await getDonationStats();
   const session = await getSession();
-  const user = session
-    ? usesFirebaseData()
-      ? await findUserById(session.userId)
-      : await (async () => {
-          const { prisma } = await import("@/lib/prisma");
-          return prisma.user.findUnique({ where: { id: session.userId } });
-        })()
-    : null;
+  const user = session ? await findUserById(session.userId) : null;
 
   const isStripeConfigured = !!process.env.STRIPE_SECRET_KEY;
   const actionToUse = isStripeConfigured ? createDonationSessionAction : createMockDonationAction;

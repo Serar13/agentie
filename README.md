@@ -8,26 +8,24 @@ Publicarea nu este automata. Pipeline-ul poate muta un articol pana la `approved
 
 - Next.js + React + TypeScript
 - Tailwind CSS
-- Prisma ORM
-- SQLite local pentru MVP
+- Firebase Firestore (singura bază de date, inclusiv local prin emulator)
 - RSS feeds + surse manuale
 - Provider AI abstract pentru OpenAI, Gemini, Anthropic si DeepSeek
 
 ## Pornire rapida (Conexiune Firebase locala)
 
-Aplicația rulează exclusiv pe **Firebase Firestore** ca data provider (`DATA_PROVIDER="firebase"`). Pentru a porni local, urmează acești pași:
+Aplicația rulează exclusiv pe **Firebase Firestore**. Nu există nicio bază de date locală alternativă. Pentru a porni local, urmează acești pași:
 
 1. Creează fișierul `.env` din `.env.example`:
    ```bash
    cp .env.example .env
    ```
 2. Configurează credențialele în `.env` folosind una din cele două opțiuni:
-   - **Opțiunea A (Recomandată - Fără chei reale):** Folosește Firebase Local Emulator. Rulează `npx firebase emulators:start` în alt terminal și activează `FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"` în `.env`.
+   - **Opțiunea A (Recomandată - Fără chei reale):** Folosește Firebase Local Emulator. Rulează `npx firebase emulators:start --only firestore` în alt terminal și activează `FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"` în `.env`. Necesită Java instalat local (cerință a emulatorului Firestore).
    - **Opțiunea B:** Descarcă cheia privată Service Account din Firebase Console și seteaz-o ca `FIREBASE_SERVICE_ACCOUNT_JSON='{...}'`.
-3. Instalează dependențele și generează Prisma client:
+3. Instalează dependențele:
    ```bash
    npm install
-   npm run build
    ```
 4. Porneste serverul de development Next.js:
    ```bash
@@ -42,9 +40,6 @@ Aplicația rulează implicit la `http://localhost:3000`.
 ## Configurare `.env`
 
 ```bash
-DATA_PROVIDER="firebase"
-DATABASE_URL="file:../db/dev.db" # Necesar doar local la build pentru Prisma client
-
 # Alege una din cele două opțiuni pentru Firebase local:
 # Opțiunea A: Emulatorul local Firestore
 FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"
@@ -77,8 +72,6 @@ TARGET_MONTHLY_ARTICLES="525"
 npm run dev
 npm run build
 npm run lint
-npm run db:migrate
-npm run db:seed
 npm run scan:sources
 npm run generate:news
 npm run cost:report
@@ -88,8 +81,8 @@ npm run cost:report
 
 ## Cum adaugi surse RSS
 
-1. Porneste aplicatia si seed-ul.
-2. Adauga surse direct in tabela `Source` prin Prisma Studio sau printr-un script intern.
+1. Porneste aplicatia (seeding-ul in Firestore se face automat la primul request).
+2. Adauga surse direct din `/admin/sources` sau in colectia `sources` din Firestore.
 3. Modelul sursei este:
 
 ```json
@@ -151,7 +144,7 @@ Tinta MVP:
 
 ## Newsletter
 
-Formularul public salveaza emailurile in `NewsletterSubscriber`. Este pregatit pentru un newsletter zilnic: `5 vesti bune in 5 minute`.
+Formularul public salveaza emailurile in colectia Firestore `newsletterSubscribers`. Este pregatit pentru un newsletter zilnic: `5 vesti bune in 5 minute`.
 
 ## Donatii si membership
 
@@ -167,15 +160,13 @@ Stripe nu este conectat in MVP, dar `.env.example` include campurile necesare pe
 ```text
 app/          rute publice si admin
 components/   componente UI
-lib/          Prisma, actiuni server-side, constante
+lib/          actiuni server-side, constante, Firebase Admin
 agents/       pipeline AI modular
-services/     RSS, cost tracking, news queries
-db/           SQLite local
+services/     RSS, cost tracking, news queries, Firestore store
 prompts/      prompturi pentru agenti
 scripts/      scanare, generare, raport costuri
 config/       exemple de surse
 docs/         documentatie editoriala si tehnica
-prisma/       schema si seed
 ```
 
 ## Note pentru productie
