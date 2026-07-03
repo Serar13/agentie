@@ -1,0 +1,19 @@
+runConfig:
+  # Keep idle cost at zero for the MVP. Raise this only after traffic needs it.
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  - variable: DATA_PROVIDER
+    value: firebase
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://positive-news-agency--positivenews-c6511.us-central1.hosted.app
+  - variable: MODEL_PROVIDER
+    value: mock
+  - variable: MONTHLY_BUDGET_EUR
+    value: "100"
+  - variable: TARGET_MONTHLY_ARTICLES
+    value: "525"

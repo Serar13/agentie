@@ -1,0 +1,19 @@
+{
+  "apphosting": {
+    "backendId": "positive-news-agency",
+    "rootDir": "/",
+    "ignore": [
+      "node_modules",
+      ".git",
+      ".next",
+      "db/*.db",
+      "db/*.db-journal",
+      ".env",
+      ".env.local",
+      ".env*.local"
+    ]
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Good News Network",
+    "type": "rss",
+    "url": "https://www.goodnewsnetwork.org/feed/",
+    "isActive": true
+  },
+  {
+    "name": "Positive News",
+    "type": "rss",
+    "url": "https://www.positive.news/feed/",
+    "isActive": true
+  },
+  {
+    "name": "Manual review queue",
+    "type": "manual",
+    "url": "https://example.com/manual-source-list",
+    "isActive": false
+  }
+]
