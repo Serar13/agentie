@@ -1,3 +1,3 @@
 export function usesFirebaseData() {
-  return true;
+  return process.env.DATA_PROVIDER !== "sqlite";
 }
