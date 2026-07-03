@@ -24,13 +24,11 @@ function throwFriendlyDevError(originalError?: any) {
 }
 
 function getCredential() {
-  // 1. Check if Firestore Emulator is active
+  // 1. Check if Firestore Emulator is active. The Admin SDK detects the
+  // *_EMULATOR_HOST env vars and skips real credential verification, so
+  // applicationDefault() works here without any real service account.
   if (process.env.FIRESTORE_EMULATOR_HOST) {
-    return cert({
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "dummy-project",
-      clientEmail: "dummy@dummy.iam.gserviceaccount.com",
-      privateKey: "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC3......\n-----END PRIVATE KEY-----\n"
-    });
+    return applicationDefault();
   }
 
   // 2. Check if raw JSON service account is provided in environment
