@@ -46,6 +46,9 @@ function fromDoc<T extends Record<string, any>>(doc: FirebaseFirestore.DocumentS
 
 async function ensureSeed() {
   const db = getFirebaseDb();
+  const now = new Date();
+
+  // 1. Categories
   const categoriesSnap = await db.collection("categories").limit(1).get();
   if (categoriesSnap.empty) {
     const batch = db.batch();
@@ -59,87 +62,166 @@ async function ensureSeed() {
     await batch.commit();
   }
 
-  const articlesSnap = await db.collection("articles").limit(1).get();
-  if (!articlesSnap.empty) return;
+  // 2. Users (Admin and default reader)
+  const usersSnap = await db.collection("users").limit(1).get();
+  if (usersSnap.empty) {
+    const hashPassword = (pwd: string) => {
+      return crypto.pbkdf2Sync(pwd, "salt-positive-news-pwd", 1000, 64, "sha512").toString("hex");
+    };
 
-  const now = new Date();
-  const demoArticles = [
-    {
-      id: "demo_romania_buna",
-      title: "O retea de voluntari duce carti si ateliere in sate mici",
-      slug: "retea-voluntari-carti-ateliere-sate",
-      subtitle: "Un model simplu de educatie comunitara poate fi replicat rapid local.",
-      lead: "Bibliotecile mobile si atelierele de weekend aduc resurse educationale acolo unde oferta locala este limitata.",
-      content:
-        "Programul combina donatii de carte, mentorat si sesiuni practice tinute de voluntari locali.\n\nEchipa editoriala marcheaza acest articol ca demo pana cand fluxul de surse reale este conectat la Firestore.",
-      imageUrl: "/images/romania-buna.png",
-      categoryId: "romania-buna",
-      categorySlug: "romania-buna",
-      categoryName: "Romania buna",
-      status: "published",
-      positiveScore: 91,
-      confidenceScore: 87,
-      sourceQualityScore: 82,
-      originalityScore: 80,
-      editorialScore: 88,
-      riskLevel: "low",
-      sourceName: "Demo editorial",
-      references: [
-        {
-          id: "ref_demo_1",
-          title: "Program comunitar local",
-          outlet: "Demo",
-          url: "https://example.com",
-          verified: true,
-          checkedAt: now
-        }
-      ]
-    },
-    {
-      id: "demo_mediu",
-      title: "Scoli si primarii planteaza perdele verzi in jurul curtilor",
-      slug: "scoli-primarii-perdele-verzi",
-      subtitle: "Initiativele locale mici pot imbunatati confortul urban si educatia de mediu.",
-      lead: "Elevii participa la plantari si monitorizeaza evolutia arborilor pe parcursul anului scolar.",
-      content:
-        "Proiectele de vegetatie urbana creeaza umbra, reduc praful si transforma curtea scolii intr-un spatiu de invatare aplicata.\n\nAcesta este continut demo pentru etapa Firebase.",
-      imageUrl: "/images/mediu.png",
-      categoryId: "mediu",
-      categorySlug: "mediu",
-      categoryName: "Mediu",
-      status: "published",
-      positiveScore: 89,
-      confidenceScore: 84,
-      sourceQualityScore: 80,
-      originalityScore: 76,
-      editorialScore: 86,
-      riskLevel: "low",
-      sourceName: "Demo editorial",
-      references: [
-        {
-          id: "ref_demo_2",
-          title: "Initiativa de mediu",
-          outlet: "Demo",
-          url: "https://example.com",
-          verified: true,
-          checkedAt: now
-        }
-      ]
-    }
-  ];
-
-  const batch = db.batch();
-  demoArticles.forEach((article) => {
-    batch.set(db.collection("articles").doc(article.id), {
-      ...article,
+    const batch = db.batch();
+    const adminId = "usr_admin";
+    batch.set(db.collection("users").doc(adminId), {
+      email: "admin@vestibune.ro",
+      name: "Editor Principal",
+      passwordHash: hashPassword("admin123"),
+      role: "admin",
+      location: "București",
+      followedCategories: "",
+      savedArticles: "",
+      newsletterOptIn: true,
       createdAt: now,
-      updatedAt: now,
-      publishedAt: now,
-      approvedAt: now,
-      scannedAt: now
+      updatedAt: now
     });
-  });
-  await batch.commit();
+
+    const readerId = "usr_reader";
+    batch.set(db.collection("users").doc(readerId), {
+      email: "cititor@exemplu.ro",
+      name: "Mihai Popescu",
+      passwordHash: hashPassword("reader123"),
+      role: "reader",
+      location: "Cluj-Napoca",
+      followedCategories: "",
+      savedArticles: "",
+      newsletterOptIn: true,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    await batch.commit();
+  }
+
+  // 3. RSS Sources
+  const sourcesSnap = await db.collection("sources").limit(1).get();
+  if (sourcesSnap.empty) {
+    const batch = db.batch();
+    batch.set(db.collection("sources").doc("src_goodnews"), {
+      name: "Good News Network",
+      type: "rss",
+      url: "https://www.goodnewsnetwork.org/feed/",
+      status: "active",
+      trustScore: 85,
+      scanFrequencyMin: 30,
+      articlesExtracted: 0,
+      articlesAccepted: 0,
+      articlesRejected: 0,
+      blacklistKeywords: "accident,crima,deces,razboi",
+      whitelistKeywords: "school,nature,medical,innovative",
+      notes: "Sursa RSS internationala majora.",
+      createdAt: now,
+      updatedAt: now
+    });
+
+    batch.set(db.collection("sources").doc("src_positivenews"), {
+      name: "Positive News UK",
+      type: "rss",
+      url: "https://www.positive.news/feed/",
+      status: "active",
+      trustScore: 90,
+      scanFrequencyMin: 60,
+      articlesExtracted: 0,
+      articlesAccepted: 0,
+      articlesRejected: 0,
+      blacklistKeywords: "accident,incident,tragedy",
+      notes: "Sursa RSS UK de incredere.",
+      createdAt: now,
+      updatedAt: now
+    });
+
+    await batch.commit();
+  }
+
+  // 4. Articles
+  const articlesSnap = await db.collection("articles").limit(1).get();
+  if (articlesSnap.empty) {
+    const demoArticles = [
+      {
+        id: "demo_romania_buna",
+        title: "O retea de voluntari duce carti si ateliere in sate mici",
+        slug: "retea-voluntari-carti-ateliere-sate",
+        subtitle: "Un model simplu de educatie comunitara poate fi replicat rapid local.",
+        lead: "Bibliotecile mobile si atelierele de weekend aduc resurse educationale acolo unde oferta locala este limitata.",
+        content:
+          "Programul combina donatii de carte, mentorat si sesiuni practice tinute de voluntari locali.\n\nEchipa editoriala marcheaza acest articol ca demo pana cand fluxul de surse reale este conectat la Firestore.",
+        imageUrl: "/images/romania-buna.png",
+        categoryId: "romania-buna",
+        categorySlug: "romania-buna",
+        categoryName: "Romania buna",
+        status: "published",
+        positiveScore: 91,
+        confidenceScore: 87,
+        sourceQualityScore: 82,
+        originalityScore: 80,
+        editorialScore: 88,
+        riskLevel: "low",
+        sourceName: "Demo editorial",
+        references: [
+          {
+            id: "ref_demo_1",
+            title: "Program comunitar local",
+            outlet: "Demo",
+            url: "https://example.com",
+            verified: true,
+            checkedAt: now
+          }
+        ]
+      },
+      {
+        id: "demo_mediu",
+        title: "Scoli si primarii planteaza perdele verzi in jurul curtilor",
+        slug: "scoli-primarii-perdele-verzi",
+        subtitle: "Initiativele locale mici pot imbunatati confortul urban si educatia de mediu.",
+        lead: "Elevii participa la plantari si monitorizeaza evolutia arborilor pe parcursul anului scolar.",
+        content:
+          "Proiectele de vegetatie urbana creeaza umbra, reduc praful si transforma curtea scolii intr-un spatiu de invatare aplicata.\n\nAcesta este continut demo pentru etapa Firebase.",
+        imageUrl: "/images/mediu.png",
+        categoryId: "mediu",
+        categorySlug: "mediu",
+        categoryName: "Mediu",
+        status: "published",
+        positiveScore: 89,
+        confidenceScore: 84,
+        sourceQualityScore: 80,
+        originalityScore: 76,
+        editorialScore: 86,
+        riskLevel: "low",
+        sourceName: "Demo editorial",
+        references: [
+          {
+            id: "ref_demo_2",
+            title: "Initiativa de mediu",
+            outlet: "Demo",
+            url: "https://example.com",
+            verified: true,
+            checkedAt: now
+          }
+        ]
+      }
+    ];
+
+    const batch = db.batch();
+    demoArticles.forEach((article) => {
+      batch.set(db.collection("articles").doc(article.id), {
+        ...article,
+        createdAt: now,
+        updatedAt: now,
+        publishedAt: now,
+        approvedAt: now,
+        scannedAt: now
+      });
+    });
+    await batch.commit();
+  }
 }
 
 export async function getCategories() {

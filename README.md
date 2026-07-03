@@ -13,33 +13,44 @@ Publicarea nu este automata. Pipeline-ul poate muta un articol pana la `approved
 - RSS feeds + surse manuale
 - Provider AI abstract pentru OpenAI, Gemini, Anthropic si DeepSeek
 
-## Pornire rapida (SQLite fallback - Fara Firebase necesar)
+## Pornire rapida (Conexiune Firebase locala)
 
-Implicit, aplicatia este configurata sa ruleze local folosind **SQLite si Prisma** ca data provider (`DATA_PROVIDER="sqlite"`), fara sa necesite nicio credențiala sau conexiune la Firebase.
+Aplicația rulează exclusiv pe **Firebase Firestore** ca data provider (`DATA_PROVIDER="firebase"`). Pentru a porni local, urmează acești pași:
 
-```bash
-cd ~/Developer/positive-news-agency
-cp .env.example .env
-npm install
-npm run db:migrate
-npm run db:seed
-npm run dev
-```
+1. Creează fișierul `.env` din `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Configurează credențialele în `.env` folosind una din cele două opțiuni:
+   - **Opțiunea A (Recomandată - Fără chei reale):** Folosește Firebase Local Emulator. Rulează `npx firebase emulators:start` în alt terminal și activează `FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"` în `.env`.
+   - **Opțiunea B:** Descarcă cheia privată Service Account din Firebase Console și seteaz-o ca `FIREBASE_SERVICE_ACCOUNT_JSON='{...}'`.
+3. Instalează dependențele și generează Prisma client:
+   ```bash
+   npm install
+   npm run build
+   ```
+4. Porneste serverul de development Next.js:
+   ```bash
+   npm run dev
+   ```
 
-Aplicatia ruleaza implicit la `http://localhost:3000`.
+Aplicația rulează implicit la `http://localhost:3000`.
+
+> [!NOTE]
+> **Seeding automat:** La prima deschidere a paginii în browser (sau primul request), sistemul va detecta dacă baza de date Firestore este goală și va insera automat categoriile inițiale, sursele RSS implicite, conturile administrative de test și articolele demo de pornire. Nu este necesar un script separat de seed.
 
 ## Configurare `.env`
 
 ```bash
-# Alege "sqlite" pentru dev local simplu, sau "firebase" pentru emulatoare / productie
-DATA_PROVIDER="sqlite"
-DATABASE_URL="file:../db/dev.db"
+DATA_PROVIDER="firebase"
+DATABASE_URL="file:../db/dev.db" # Necesar doar local la build pentru Prisma client
 
-# Daca folosesti DATA_PROVIDER="firebase" local, alege una din optiuni:
-# 1. Firebase Local Emulator:
-# FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"
-# 2. Service Account Real:
-# FIREBASE_SERVICE_ACCOUNT_JSON='{...}'
+# Alege una din cele două opțiuni pentru Firebase local:
+# Opțiunea A: Emulatorul local Firestore
+FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"
+
+# Opțiunea B: Conexiune reală Firebase
+# FIREBASE_SERVICE_ACCOUNT_JSON='{ ...JSON-ul descarcat din consola Firebase... }'
 
 OPENAI_API_KEY=""
 GEMINI_API_KEY=""
@@ -56,21 +67,8 @@ MONTHLY_BUDGET_EUR="100"
 TARGET_MONTHLY_ARTICLES="525"
 ```
 
-`MODEL_PROVIDER="mock"` tine costurile la zero si permite testarea fluxului fara chei API. Pentru productie seteaza `openai`, `gemini`, `anthropic` sau `deepseek` si completeaza cheia respectiva.
+`MODEL_PROVIDER="mock"` ține costurile la zero și permite testarea fluxului fără chei API. Pentru producție setează `openai`, `gemini`, `anthropic` sau `deepseek` și completează cheia respectivă.
 
-## Testare cu Firebase Emulator local
-
-Daca vrei sa testezi comportamentul specific de Firebase local:
-1. Porneste emulatoarele intr-un terminal separat:
-   ```bash
-   npx firebase emulators:start
-   ```
-2. In `.env`, seteaza:
-   ```bash
-   DATA_PROVIDER="firebase"
-   FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"
-   ```
-3. Porneste serverul Next.js: `npm run dev`. Firebase Admin se va conecta automat la emulator fara sa aiba nevoie de credențiale reale.
 
 
 ## Comenzi
